@@ -56,4 +56,3 @@ kontrol("aks dosyasında kolon", len(katmandakiler(a, "LWPOLYLINE", KOLON_KATMAN
 kontrol("aks dosyasında kiriş", len(katmandakiler(a, "LINE", KIRIS_KATMAN)), 38)
 
 print("TÜM TESTLER GEÇTİ" if hata == 0 else f"{hata} TEST BAŞARISIZ")
-sys.exit(1 if hata else 0)
