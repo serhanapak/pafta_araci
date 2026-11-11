@@ -25,12 +25,12 @@ for pl in katmandakiler(msp, "LWPOLYLINE", KOLON_KATMAN):
         gecersiz += 1
         continue
     if not pl.closed:
-        # son nokta ilk noktaya basılmışsa tekrarı at, sonra kapat
-        if len(pts) > 3 and math.dist(pts[0], pts[-1]) <= TOL_UC:
-            pts = pts[:-1]
-            pl.set_points(pts, format="xy")
-        pl.closed = True
-        acik += 1
+        if math.dist(pts[0], pts[-1]) <= TOL_UC:
+            if len(pts) > 3:
+                pts = pts[:-1]
+                pl.set_points(pts, format="xy")
+            pl.closed = True
+            acik += 1
     anahtar = frozenset((round(x, 1), round(y, 1)) for x, y in pts)
     if anahtar in gorulen:
         msp.delete_entity(pl)

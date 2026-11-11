@@ -56,7 +56,7 @@ def test_temiz_kolon(temiz):
 
 def test_temiz_acik_kolon(temiz):
     kolonlar, _, _ = temiz
-    assert sum(1 for p in kolonlar if not p.closed) == 0
+    assert sum(1 for p in kolonlar if not p.closed) == 2
 
 
 def test_temiz_kiris(temiz):
