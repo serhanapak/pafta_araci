@@ -15,26 +15,29 @@ def kat(olcek=1, baslik=5, n=10):
         )
     return doc
 
-# Santimetre
-r = birim_tahmin(kat())
-assert r.birim == "cm"
-assert len(r.bulgular) == 0
 
-# Metre
-r = birim_tahmin(kat(0.01, 6))
-assert r.birim == "m"
+def test_santimetre():
+    r = birim_tahmin(kat())
+    assert r.birim == "cm"
+    assert len(r.bulgular) == 0
 
-# Milimetre
-r = birim_tahmin(kat(10, 4))
-assert r.birim == "mm"
 
-# Baslik ve geometri celiskisi
-r = birim_tahmin(kat(1, 6))
-assert r.birim == "cm"
-assert r.bulgular[0].kod == "BIRIM_BASLIK_UYUSMUYOR"
+def test_metre():
+    r = birim_tahmin(kat(0.01, 6))
+    assert r.birim == "m"
 
-# Birim ayarlari
-assert Ayar.olustur("cm").tol_uc == 1
-assert Ayar.olustur("mm").tol_uc == 10
 
-print("BIRIM MODULU: BUTUN TESTLER GECTI")
+def test_milimetre():
+    r = birim_tahmin(kat(10, 4))
+    assert r.birim == "mm"
+
+
+def test_baslik_geometri_celiskisi():
+    r = birim_tahmin(kat(1, 6))
+    assert r.birim == "cm"
+    assert r.bulgular[0].kod == "BIRIM_BASLIK_UYUSMUYOR"
+
+
+def test_birim_ayarlari():
+    assert Ayar.olustur("cm").tol_uc == 1
+    assert Ayar.olustur("mm").tol_uc == 10

@@ -1,11 +1,9 @@
 import ezdxf
+import pytest
 
 from pafta.katman import katmanlari_listele, katman_tani
 
-
-doc = ezdxf.new()
-
-adlar = [
+ADLAR = [
     "KOLON",
     "SUTUNLAR",
     "COLUMN",
@@ -19,40 +17,46 @@ adlar = [
     "TARAMA",
 ]
 
-for ad in adlar:
-    doc.layers.add(ad)
 
-liste = katmanlari_listele(doc)
-assert "KOLON" in liste
-assert "ANTET" in liste
+@pytest.fixture
+def doc():
+    d = ezdxf.new()
+    for ad in ADLAR:
+        d.layers.add(ad)
+    return d
 
-r = katman_tani(doc)
 
-assert "KOLON" in r.katmanlar["KOLON"]
-assert "SUTUNLAR" in r.katmanlar["KOLON"]
-assert "COLUMN" in r.katmanlar["KOLON"]
+def test_katmanlari_listele(doc):
+    liste = katmanlari_listele(doc)
+    assert "KOLON" in liste
+    assert "ANTET" in liste
 
-assert "KIRIS" in r.katmanlar["KIRIS"]
-assert "BEAM" in r.katmanlar["KIRIS"]
 
-assert "AKS" in r.katmanlar["AKS"]
-assert "GRID" in r.katmanlar["AKS"]
+def test_otomatik_siniflandirma(doc):
+    r = katman_tani(doc)
 
-assert "PERDE" in r.katmanlar["PERDE"]
-assert "SHEAR_WALL" in r.katmanlar["PERDE"]
+    assert "KOLON" in r.katmanlar["KOLON"]
+    assert "SUTUNLAR" in r.katmanlar["KOLON"]
+    assert "COLUMN" in r.katmanlar["KOLON"]
 
-assert "ANTET" in r.tanimsiz
-assert "TARAMA" in r.tanimsiz
+    assert "KIRIS" in r.katmanlar["KIRIS"]
+    assert "BEAM" in r.katmanlar["KIRIS"]
 
-# Kullanıcı seçimi otomatik sınıflandırmayı geçersiz kılar.
-r = katman_tani(doc, {"KOLON": ["ANTET"]})
-assert "ANTET" in r.katmanlar["KOLON"]
+    assert "AKS" in r.katmanlar["AKS"]
+    assert "GRID" in r.katmanlar["AKS"]
 
-# Olmayan katman seçilemez.
-try:
-    katman_tani(doc, {"KOLON": ["OLMAYAN"]})
-    raise AssertionError("Olmayan katman kabul edildi")
-except ValueError:
-    pass
+    assert "PERDE" in r.katmanlar["PERDE"]
+    assert "SHEAR_WALL" in r.katmanlar["PERDE"]
 
-print("KATMAN MODULU: BUTUN TESTLER GECTI")
+    assert "ANTET" in r.tanimsiz
+    assert "TARAMA" in r.tanimsiz
+
+
+def test_kullanici_secimi_otomatigi_gecersiz_kilar(doc):
+    r = katman_tani(doc, {"KOLON": ["ANTET"]})
+    assert "ANTET" in r.katmanlar["KOLON"]
+
+
+def test_olmayan_katman_secilemez(doc):
+    with pytest.raises(ValueError):
+        katman_tani(doc, {"KOLON": ["OLMAYAN"]})

@@ -1,6 +1,10 @@
+from pathlib import Path
+
 import ezdxf
 
 from pafta.blok import blok_tani
+
+KOK = Path(__file__).resolve().parent.parent
 
 
 def test_normal_blok():
@@ -111,20 +115,10 @@ def test_donus_acisi():
 
 
 def test_gercekci_dxf():
-    doc = ezdxf.readfile("gercekci_kat.dxf")
+    doc = ezdxf.readfile(KOK / "gercekci_kat.dxf")
 
     sonuc = blok_tani(doc)
 
     assert sonuc.adet == 2
     assert sonuc.isimler == {"K3060": 2}
     assert sonuc.bulgular == []
-
-
-if __name__ == "__main__":
-    test_normal_blok()
-    test_sifir_olcek()
-    test_negatif_olcek()
-    test_donus_acisi()
-    test_gercekci_dxf()
-
-    print("BLOK MODULU: BUTUN TESTLER GECTI")

@@ -1,58 +1,67 @@
 import math
 import re
-import subprocess
-import sys
+from types import SimpleNamespace
+
 import ezdxf
-from ortak import katmandakiler, kolon_merkezleri, EKSEN_KATMAN
+import pytest
+
+from ortak import EKSEN_KATMAN, katmandakiler, kolon_merkezleri
 
 
-def calistir(*arg):
-    r = subprocess.run([sys.executable, *arg], capture_output=True, text=True)
-    if r.returncode != 0:
-        print(f"{' '.join(arg)} hata verdi:\n{r.stderr}")
-        sys.exit(1)
-    return r.stdout
+@pytest.fixture(scope="module")
+def gercekci(tmp_path_factory, calistir):
+    d = tmp_path_factory.mktemp("gercekci")
+    calistir("uret_gercekci.py", d)
+    cikti_t = calistir("temizle.py", d, "gercekci_kat.dxf", "gercekci_temiz.dxf")
+    cikti_a = calistir("aks.py", d, "gercekci_temiz.dxf", "gercekci_aks.dxf")
+    doc = ezdxf.readfile(d / "gercekci_temiz.dxf")
+    return SimpleNamespace(cikti_t=cikti_t, cikti_a=cikti_a, doc=doc, msp=doc.modelspace())
 
 
-calistir("uret_gercekci.py")
-cikti_t = calistir("temizle.py", "gercekci_kat.dxf", "gercekci_temiz.dxf")
-cikti_a = calistir("aks.py", "gercekci_temiz.dxf", "gercekci_aks.dxf")
-
-hata = 0
-
-
-def kontrol(ad, bulunan, beklenen):
-    global hata
-    ok = bulunan == beklenen
-    if not ok:
-        hata += 1
-    print(f"{'OK  ' if ok else 'HATA'} {ad}: {bulunan} (beklenen {beklenen})")
+def _sayilar(desen, metin):
+    m = re.search(desen, metin)
+    assert m, f"çıktıda {desen!r} bulunamadı:\n{metin}"
+    return tuple(int(g) for g in m.groups())
 
 
-kolon = int(re.search(r"KOLON\s*:\s*(\d+) adet", cikti_t).group(1))
-kiris = int(re.search(r"KİRİŞ\s*:\s*(\d+) adet", cikti_t).group(1))
-dusey, yatay = map(int, re.search(r"(\d+) düşey.*?(\d+) yatay", cikti_a).groups())
-bos = int(re.search(r"boş kesişim:\s*(\d+)", cikti_a).group(1))
+# betik raporları
+def test_kolon_adedi_poligon_ve_blok(gercekci):
+    assert _sayilar(r"KOLON\s*:\s*(\d+) adet", gercekci.cikti_t) == (24,)
 
-kontrol("kolon adedi (22 poligon + 2 blok)", kolon, 24)
-kontrol("kiriş adedi (76 çizgi = 38 kiriş)", kiris, 38)
-kontrol("düşey aks", dusey, 6)
-kontrol("yatay aks", yatay, 4)
-kontrol("boş aks kesişimi", bos, 0)
 
-# çıktı dosyasını doğrudan oku
-d = ezdxf.readfile("gercekci_temiz.dxf")
-m = d.modelspace()
-merk = kolon_merkezleri(d, m)
-eks = katmandakiler(m, "LINE", [EKSEN_KATMAN])
-kontrol("kolon merkezi (poligon + blok)", len(merk), 24)
-kontrol("kiriş ekseni (KIRIS_EKSEN)", len(eks), 38)
-disarda = 0
-for l in eks:
-    for p in ((l.dxf.start.x, l.dxf.start.y), (l.dxf.end.x, l.dxf.end.y)):
-        if min(math.dist(c, p) for c in merk) > 1e-6:
-            disarda += 1
-kontrol("kolon merkezine oturmayan eksen ucu", disarda, 0)
+def test_kiris_adedi_cift_cizgiden(gercekci):
+    assert _sayilar(r"KİRİŞ\s*:\s*(\d+) adet", gercekci.cikti_t) == (38,)
 
-print("TÜM TESTLER GEÇTİ" if hata == 0 else f"{hata} TEST BAŞARISIZ")
-sys.exit(1 if hata else 0)
+
+def test_dusey_aks(gercekci):
+    dusey, _ = _sayilar(r"(\d+) düşey.*?(\d+) yatay", gercekci.cikti_a)
+    assert dusey == 6
+
+
+def test_yatay_aks(gercekci):
+    _, yatay = _sayilar(r"(\d+) düşey.*?(\d+) yatay", gercekci.cikti_a)
+    assert yatay == 4
+
+
+def test_bos_aks_kesisimi(gercekci):
+    assert _sayilar(r"boş kesişim:\s*(\d+)", gercekci.cikti_a) == (0,)
+
+
+# çıktı dosyası
+def test_kolon_merkezi_poligon_ve_blok(gercekci):
+    assert len(kolon_merkezleri(gercekci.doc, gercekci.msp)) == 24
+
+
+def test_kiris_ekseni(gercekci):
+    assert len(katmandakiler(gercekci.msp, "LINE", [EKSEN_KATMAN])) == 38
+
+
+def test_eksen_ucu_kolon_merkezinde(gercekci):
+    merk = kolon_merkezleri(gercekci.doc, gercekci.msp)
+    eks = katmandakiler(gercekci.msp, "LINE", [EKSEN_KATMAN])
+    disarda = 0
+    for l in eks:
+        for p in ((l.dxf.start.x, l.dxf.start.y), (l.dxf.end.x, l.dxf.end.y)):
+            if min(math.dist(c, p) for c in merk) > 1e-6:
+                disarda += 1
+    assert disarda == 0
