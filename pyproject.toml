@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pafta-araci"
+version = "0.2.0"
+description = "Yapısal CAD (DXF) Kat Planı Kalite Kontrol, Temizleme ve Otomatik Aks Üretim Aracı"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "ezdxf>=1.1.0",
+    "numpy>=1.26.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.scripts]
+pafta-temizle = "temizle:main"
+pafta-aks = "aks:main"
+
+[tool.setuptools]
+packages = ["pafta"]
+py-modules = ["aks", "temizle", "ortak"]

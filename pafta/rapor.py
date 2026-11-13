@@ -19,6 +19,8 @@ class AnalizRaporu:
     kiris_sayisi: int = 0
     cift_cizgi_eksen_sayisi: int = 0
     tek_cizgi_sayisi: int = 0
+    perde_sayisi: int = 0
+    perde_eksen_sayisi: int = 0
 
     # Aks bilgileri
     dusey_aks_sayisi: int = 0
@@ -62,6 +64,7 @@ class AnalizRaporu:
             f"tek çizgi {self.tek_cizgi_sayisi} | uç yakalanan {self.uc_yakalanan_kiris} | "
             f"çakışık silinen {self.cakisik_kiris_silinen} | sıfır boy silinen {self.sifir_boy_kiris_silinen} | "
             f"kolon dışı uç {self.kolon_disi_uc_sayisi}",
+            *( [f"PERDE : {self.perde_sayisi} adet | eksen {self.perde_eksen_sayisi}"] if self.perde_sayisi else [] ),
             f"çıkış : {self.cikis_dosyasi}",
         ]
         return "\n".join(lines)

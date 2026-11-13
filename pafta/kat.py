@@ -9,6 +9,8 @@ from pafta.blok import blok_tani
 from pafta.kolon import kolonlari_isle
 from pafta.kiris import kirisleri_isle
 from pafta.aks import akslari_isle
+from pafta.perde import perdeleri_isle
+from pafta.kural import tbdy_on_kontrol, hatalari_ciz
 from pafta.rapor import AnalizRaporu
 from pafta.duzelt import guvenli_kaydet
 from pafta.hata import Bulgu
@@ -56,7 +58,7 @@ class KatPaftasi:
     def rapor(self) -> AnalizRaporu | None:
         return self.son_rapor
 
-    def temizle(self, cikis_yolu: str | Path | None = None) -> AnalizRaporu:
+    def temizle(self, cikis_yolu: str | Path | None = None, gorsel_hata: bool = False) -> AnalizRaporu:
         cikis = Path(cikis_yolu) if cikis_yolu else self.dosya_yolu
         rapor = AnalizRaporu(
             dosya_adi=str(self.dosya_yolu),
@@ -111,6 +113,20 @@ class KatPaftasi:
         rapor.kolon_disi_uc_sayisi = kiris_sonuc.kolon_disi_uc_sayisi
         rapor.bulgular.extend(kiris_sonuc.bulgular)
 
+        # 2b. Perde duvarları işle
+        perde_sonuc = perdeleri_isle(
+            self.doc, self.msp, self.perde_katmanlari, self.ayar, duzelt=True
+        )
+        rapor.perde_sayisi = len(perde_sonuc.perdeler)
+        rapor.perde_eksen_sayisi = len(perde_sonuc.eksenler)
+        rapor.bulgular.extend(perde_sonuc.bulgular)
+
+        # 2c. Enkesit ön kontrolleri
+        rapor.bulgular.extend(tbdy_on_kontrol(kolon_sonuc, self.ayar))
+
+        if gorsel_hata:
+            hatalari_ciz(self.doc, self.msp, rapor.bulgular, self.ayar)
+
         # 3. Kısa kenar uyarısı
         if kolon_sonuc.kisa_kenarlar:
             med = statistics.median(kolon_sonuc.kisa_kenarlar)
@@ -127,7 +143,7 @@ class KatPaftasi:
         self.son_rapor = rapor
         return rapor
 
-    def aks_uret(self, cikis_yolu: str | Path | None = None) -> AnalizRaporu:
+    def aks_uret(self, cikis_yolu: str | Path | None = None, gorsel_hata: bool = False) -> AnalizRaporu:
         cikis = Path(cikis_yolu) if cikis_yolu else self.dosya_yolu
         rapor = self.son_rapor or AnalizRaporu(
             dosya_adi=str(self.dosya_yolu),
@@ -164,6 +180,17 @@ class KatPaftasi:
         rapor.bos_aks_kesisimi = aks_sonuc.bos_kesisim
         rapor.bulgular.extend(aks_sonuc.bulgular)
 
+        if gorsel_hata:
+            hatalari_ciz(self.doc, self.msp, rapor.bulgular, self.ayar)
+
         guvenli_kaydet(self.doc, cikis, giris_yolu=self.dosya_yolu)
         self.son_rapor = rapor
         return rapor
+
+    def hatalari_isaretle(self, cikis_yolu: str | Path | None = None) -> int:
+        cikis = Path(cikis_yolu) if cikis_yolu else self.dosya_yolu
+        if self.son_rapor is None:
+            self.temizle(cikis, gorsel_hata=False)
+        adet = hatalari_ciz(self.doc, self.msp, self.son_rapor.bulgular, self.ayar)
+        guvenli_kaydet(self.doc, cikis, giris_yolu=self.dosya_yolu)
+        return adet

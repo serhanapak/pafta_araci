@@ -29,13 +29,20 @@ class Ayar:
     kiris_en_max: float
     yuz_max: float
     tol_eksen: float
+    kolon_min_dikdortgen: float = 30.0
+    kolon_min_dairesel: float = 35.0
+    perde_min_kalinlik: float = 25.0
+    perde_min_oran: float = 6.0
 
     @staticmethod
     def olustur(birim):
         if birim not in CARPAN:
             raise ValueError(f"Birim belirsiz: {birim}")
         c = CARPAN[birim]
-        return Ayar(birim, 1*c, 5*c, 10*c, 80*c, 60*c, 10*c)
+        return Ayar(
+            birim, 1*c, 5*c, 10*c, 80*c, 60*c, 10*c,
+            30.0*c, 35.0*c, 25.0*c, 6.0
+        )
 
 
 def kisa_kenarlar(msp, katmanlar=None):
