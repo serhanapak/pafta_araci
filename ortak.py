@@ -1,22 +1,20 @@
 import math
 
-# katman adları: Sta4CAD çıktısında farklıysa buradan değiştir
 KOLON_KATMAN = ["KOLON"]
 KIRIS_KATMAN = ["KIRIS"]
 AKS_KATMAN = "AKS"
 EKSEN_KATMAN = "KIRIS_EKSEN"
 
-# tolerans ve ölçüler (çizim birimi cm varsayımı)
-TOL_UC = 1.0          # kiriş ucu -> kolon merkezi yakalama mesafesi
-TOL_AKS = 5.0         # bu farkın altındaki merkezler aynı aks sayılır
-BALON_YC = 40         # aks balonu yarıçapı
-BALON_OFS = 150       # balonun ilk akstan dışarı kaçıklığı
-AKS_UZAMA = 100       # aks çizgisinin son elemandan taşması
-YAZI_H = 30           # balon yazı yüksekliği
-KIRIS_EN_MIN = 10.0   # kiriş kenar çizgileri arası alt sınır (kiriş genişliği)
-KIRIS_EN_MAX = 80.0   # üst sınır
-YUZ_MAX = 60.0        # eksen ucu -> kolon merkezi azami mesafe
-TOL_EKSEN = 10.0      # kolon merkezinin kiriş ekseninden azami kaçıklığı
+TOL_UC = 1.0
+TOL_AKS = 5.0
+BALON_YC = 40
+BALON_OFS = 150
+AKS_UZAMA = 100
+YAZI_H = 30
+KIRIS_EN_MIN = 10.0
+KIRIS_EN_MAX = 80.0
+YUZ_MAX = 60.0
+TOL_EKSEN = 10.0
 
 
 def katmandakiler(msp, tur, katmanlar):
@@ -29,8 +27,9 @@ def kose_listesi(pl):
 
 
 def merkez(pts):
-    # alan ağırlık merkezi; köşe ortalaması L/T perdede ve ara noktalı kolonda şaşar
     n = len(pts)
+    if n == 0:
+        return (0.0, 0.0)
     a2 = cx = cy = 0.0
     for i in range(n):
         x0, y0 = pts[i]
@@ -40,57 +39,74 @@ def merkez(pts):
         cx += (x0 + x1) * c
         cy += (y0 + y1) * c
     if abs(a2) < 1e-9:
-        return (sum(p[0] for p in pts) / n, sum(p[1] for p in pts) / n)
+        xs = [p[0] for p in pts]
+        ys = [p[1] for p in pts]
+        return ((min(xs) + max(xs)) / 2.0, (min(ys) + max(ys)) / 2.0)
     return (cx / (3 * a2), cy / (3 * a2))
 
 
 def blok_merkezleri(doc, ins):
-    # INSERT içindeki kapalı polyline merkezleri: ölçek, dönüş, yerleşim noktası uygulanır
     blk = doc.blocks.get(ins.dxf.name)
     if blk is None:
         return []
-    ix, iy = ins.dxf.insert.x, ins.dxf.insert.y
-    t = math.radians(ins.dxf.get("rotation", 0))
-    sx = ins.dxf.get("xscale", 1)
-    sy = ins.dxf.get("yscale", 1)
-    c, s = math.cos(t), math.sin(t)
+
+    sx = ins.dxf.get("xscale", 1.0)
+    sy = ins.dxf.get("yscale", 1.0)
+    if abs(sx) < 1e-6 or abs(sy) < 1e-6:
+        return []
+
+    matrix = ins.matrix44()
     sonuc = []
+
     for e in blk:
-        if e.dxftype() != "LWPOLYLINE":
-            continue
-        pts = kose_listesi(e)
-        if len(pts) < 3:
-            continue
-        mx, my = merkez(pts)
-        mx, my = mx * sx, my * sy
-        sonuc.append((ix + mx * c - my * s, iy + mx * s + my * c))
+        if e.dxftype() == "LWPOLYLINE":
+            if not e.closed:
+                continue
+            pts = kose_listesi(e)
+            if len(pts) < 3:
+                continue
+            mx, my = merkez(pts)
+            nokta = matrix.transform((mx, my, 0))
+            sonuc.append((nokta.x, nokta.y))
+        elif e.dxftype() == "CIRCLE":
+            if e.dxf.radius <= 0:
+                continue
+            nokta = matrix.transform((e.dxf.center.x, e.dxf.center.y, 0))
+            sonuc.append((nokta.x, nokta.y))
+
     return sonuc
 
 
-def kolon_merkezleri(doc, msp):
+def kolon_merkezleri(doc, msp, katmanlar=None):
+    if katmanlar is None:
+        katmanlar = KOLON_KATMAN
     m = []
-    for pl in katmandakiler(msp, "LWPOLYLINE", KOLON_KATMAN):
+    for pl in katmandakiler(msp, "LWPOLYLINE", katmanlar):
         pts = kose_listesi(pl)
         if len(pts) >= 3:
             m.append(merkez(pts))
-    for ins in katmandakiler(msp, "INSERT", KOLON_KATMAN):
+    for c in katmandakiler(msp, "CIRCLE", katmanlar):
+        if c.dxf.radius > 0:
+            m.append((c.dxf.center.x, c.dxf.center.y))
+    for ins in katmandakiler(msp, "INSERT", katmanlar):
         m += blok_merkezleri(doc, ins)
     return m
 
 
 def grupla(degerler, tol):
-    d = sorted(degerler)
+    if not degerler:
+        return []
+    d = sorted(float(v) for v in degerler)
     gruplar = [[d[0]]]
     for v in d[1:]:
-        if v - gruplar[-1][-1] <= tol:
+        if v - gruplar[-1][0] <= tol:
             gruplar[-1].append(v)
         else:
             gruplar.append([v])
-    return [round(sum(g) / len(g), 1) for g in gruplar]
+    return [round(float(sum(g) / len(g)), 1) for g in gruplar]
 
 
 def harf(j):
-    # 0->A, 25->Z, 26->AA
     s = ""
     j += 1
     while j:
@@ -100,8 +116,7 @@ def harf(j):
 
 
 def kiris_ciftle(cizgiler, en_min, en_max, tol=0.05):
-    # yatay/düşey kenar çizgilerini çift olarak eşler, eksen çizgisi üretir
-    # cizgiler: [(p, q), ...]  döner: (eksenler, eşleşen çizgi indisleri)
+    # O(N log N): dik koordinata göre sıralı pencerede kenar çiftleme
     eksenler = []
     kullanilan = set()
     for yatay in (True, False):
@@ -111,15 +126,20 @@ def kiris_ciftle(cizgiler, en_min, en_max, tol=0.05):
                 liste.append((i, p[1], min(p[0], q[0]), max(p[0], q[0])))
             elif not yatay and abs(p[0] - q[0]) < tol and abs(p[1] - q[1]) > tol:
                 liste.append((i, p[0], min(p[1], q[1]), max(p[1], q[1])))
-        for a in liste:
+
+        liste.sort(key=lambda item: item[1])
+        n = len(liste)
+        for idx_a in range(n):
+            a = liste[idx_a]
             if a[0] in kullanilan:
                 continue
             en_iyi = None
-            for b in liste:
-                if b[0] == a[0] or b[0] in kullanilan:
-                    continue
-                fark = abs(b[1] - a[1])
-                if fark < en_min or fark > en_max:
+            for idx_b in range(idx_a + 1, n):
+                b = liste[idx_b]
+                fark = b[1] - a[1]
+                if fark > en_max:
+                    break
+                if fark < en_min or b[0] in kullanilan:
                     continue
                 bas = max(a[2], b[2])
                 son = min(a[3], b[3])
@@ -140,7 +160,6 @@ def kiris_ciftle(cizgiler, en_min, en_max, tol=0.05):
 
 
 def eksen_uzat(p, q, merkezler, yuz_max, tol_dik, tol_uc=TOL_UC):
-    # eksen uçlarını, eksen üzerinde duran en yakın kolon merkezine uzatır
     yatay = abs(p[1] - q[1]) < 1e-6
 
     def uv(n):

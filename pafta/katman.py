@@ -7,10 +7,15 @@ from pafta.hata import Bulgu
 KATEGORILER = ("KOLON", "KIRIS", "AKS", "PERDE")
 
 ESLESMELER = {
-    "KOLON": ("KOLON", "SUTUN", "COLUMN", "COLUMNS"),
-    "KIRIS": ("KIRIS", "BEAM", "BEAMS", "KIRISLER"),
-    "AKS": ("AKS", "AXIS", "GRID", "GRIDS"),
-    "PERDE": ("PERDE", "SHEARWALL", "SHEAR_WALL", "WALL"),
+    "KOLON": ("KOLON", "SUTUN", "COLUMN", "COLUMNS", "STUP", "POTEAU"),
+    "KIRIS": ("KIRIS", "BEAM", "BEAMS", "KIRISLER", "GREDA", "GREDE", "POUTRE"),
+    "AKS": ("AKS", "AXIS", "GRID", "GRIDS", "AXE", "AXES"),
+    "PERDE": ("PERDE", "SHEARWALL", "SHEAR_WALL", "WALL", "ZID", "VOILE"),
+}
+
+TAM_ESLESME = {
+    "KOLON": ("COL", "COLS"),
+    "AKS": ("OSI",),
 }
 
 
@@ -29,23 +34,33 @@ def normalize(ad):
 
 
 def katmanlari_listele(doc):
-    return sorted(layer.dxf.name for layer in doc.layers)
+    katmanlar = {layer.dxf.name for layer in doc.layers}
+    try:
+        for e in doc.modelspace():
+            if hasattr(e.dxf, "layer"):
+                katmanlar.add(e.dxf.layer)
+    except Exception:
+        pass
+    return sorted(katmanlar)
 
 
 def _siniflandir(ad):
     temiz = normalize(ad)
-
-    # Katman adını ayraçlara göre böl.
     parcalar = temiz.replace("-", "_").replace(" ", "_").split("_")
-
     bulunan = []
 
     for kategori, anahtarlar in ESLESMELER.items():
+        if kategori == "KIRIS" and "EKSEN" in parcalar:
+            continue
+
+        tam_set = {normalize(t) for t in TAM_ESLESME.get(kategori, ())}
+        if any(p in tam_set for p in parcalar):
+            bulunan.append(kategori)
+            continue
+
         for anahtar in anahtarlar:
             anahtar = normalize(anahtar)
-
-            if any(p == anahtar or p.startswith(anahtar)
-                   for p in parcalar):
+            if any(p == anahtar or p.startswith(anahtar) for p in parcalar):
                 bulunan.append(kategori)
                 break
 
@@ -53,58 +68,37 @@ def _siniflandir(ad):
 
 
 def katman_tani(doc, secimler=None):
-    """
-    secimler örneği:
-    {"KOLON": ["S-01"], "KIRIS": ["B-01"]}
-
-    Kullanıcı seçimi otomatik tahminden önceliklidir.
-    """
     mevcut = katmanlari_listele(doc)
     secimler = secimler or {}
 
-    sonuc = KatmanSonuc(
-        katmanlar={k: [] for k in KATEGORILER}
-    )
-
-    # Kullanıcı seçimlerini doğrula.
+    sonuc = KatmanSonuc(katmanlar={k: [] for k in KATEGORILER})
     secilmis = {}
 
     for kategori, adlar in secimler.items():
         kategori = kategori.upper()
-
         if kategori not in KATEGORILER:
             raise ValueError(f"Bilinmeyen kategori: {kategori}")
-
         if isinstance(adlar, str):
             adlar = [adlar]
-
         for ad in adlar:
             if ad not in mevcut:
                 raise ValueError(f"DXF içinde katman bulunamadı: {ad}")
-
             secilmis.setdefault(ad, []).append(kategori)
 
-    # Otomatik tanıma ve kullanıcı seçimini birleştir.
     for ad in mevcut:
-        if ad in secilmis:
-            kategoriler = secilmis[ad]
-        else:
-            kategoriler = _siniflandir(ad)
+        kategoriler = secilmis[ad] if ad in secilmis else _siniflandir(ad)
 
         if len(kategoriler) == 1:
             sonuc.katmanlar[kategoriler[0]].append(ad)
-
         elif len(kategoriler) > 1:
             sonuc.bulgular.append(
                 Bulgu(
                     "KATMAN_BELIRSIZ",
                     "UYARI",
-                    f"{ad} birden fazla kategoriyle eşleşiyor: "
-                    f"{', '.join(kategoriler)}"
+                    f"{ad} birden fazla kategoriyle eşleşiyor: {', '.join(kategoriler)}",
                 )
             )
             sonuc.tanimsiz.append(ad)
-
         else:
             sonuc.tanimsiz.append(ad)
 
@@ -113,7 +107,7 @@ def katman_tani(doc, secimler=None):
             Bulgu(
                 "KATMAN_TANIMSIZ",
                 "BILGI",
-                f"{len(sonuc.tanimsiz)} katman otomatik tanınamadı."
+                f"{len(sonuc.tanimsiz)} katman otomatik tanınamadı.",
             )
         )
 
@@ -123,7 +117,7 @@ def katman_tani(doc, secimler=None):
                 Bulgu(
                     f"{kategori}_KATMANI_BULUNAMADI",
                     "UYARI",
-                    f"{kategori} kategorisinde tanınan katman yok."
+                    f"{kategori} kategorisinde tanınan katman yok.",
                 )
             )
 

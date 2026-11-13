@@ -1,3 +1,4 @@
+import math
 import statistics
 from dataclasses import dataclass
 from pafta.hata import Bulgu
@@ -42,18 +43,28 @@ def kisa_kenarlar(msp, katmanlar=None):
     sonuc = []
 
     for e in msp.query("LWPOLYLINE"):
-        if not e.closed:
+        pts = [(p[0], p[1]) for p in e.get_points("xy")]
+        if len(pts) < 3:
             continue
         if kat is not None and e.dxf.layer.upper() not in kat:
             continue
 
-        pts = [(p[0], p[1]) for p in e.get_points("xy")]
-        if len(pts) < 3:
-            continue
+        # Kapalı polyline veya uçları birbirine çok yakın (kapanabilir) kolon adayı
+        if not e.closed:
+            d_uc = math.dist(pts[0], pts[-1])
+            # Uçları açık ama çizgiye göre çok yakınsa kolon kabul et
+            xs = [p[0] for p in pts]
+            ys = [p[1] for p in pts]
+            kisa = min(max(xs)-min(xs), max(ys)-min(ys))
+            if kisa == 0 or d_uc > kisa * 0.2:
+                continue
+        else:
+            xs = [p[0] for p in pts]
+            ys = [p[1] for p in pts]
+            kisa = min(max(xs)-min(xs), max(ys)-min(ys))
 
-        xs = [p[0] for p in pts]
-        ys = [p[1] for p in pts]
-        sonuc.append(min(max(xs)-min(xs), max(ys)-min(ys)))
+        if kisa > 0:
+            sonuc.append(kisa)
 
     return sonuc
 
@@ -64,6 +75,13 @@ def birim_tahmin(doc, katmanlar=None):
     bulgular = []
 
     if not kisa:
+        if baslik:
+            bulgular.append(Bulgu(
+                "BIRIM_AZ_VERI", "UYARI",
+                f"Geometri ornegi yok; DXF baslik birimi ({baslik}) kullanildi"
+            ))
+            return BirimSonuc(baslik, baslik, None, 0, bulgular)
+
         bulgular.append(Bulgu(
             "BIRIM_BELIRSIZ", "HATA",
             "Kapali polyline yok; birim anlasilamadi"

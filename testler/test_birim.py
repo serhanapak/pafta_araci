@@ -32,6 +32,17 @@ def test_milimetre():
     assert r.birim == "mm"
 
 
+def test_geometri_yoksa_bilinen_dxf_baslik_birimi_kullanilir():
+    doc = ezdxf.new()
+    doc.header["$INSUNITS"] = 4
+
+    r = birim_tahmin(doc)
+
+    assert r.birim == "mm"
+    assert r.baslik == "mm"
+    assert any(b.kod == "BIRIM_AZ_VERI" for b in r.bulgular)
+
+
 def test_baslik_geometri_celiskisi():
     r = birim_tahmin(kat(1, 6))
     assert r.birim == "cm"
