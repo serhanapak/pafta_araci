@@ -1,18 +1,53 @@
-# pafta_araci (Structural CAD Analyzer)
+# pafta_araci
 
-Yapısal DXF kat planlarını analiz eden, çizim hatalarını temizleyen, kiriş merkez eksenlerini çıkaran ve kolon yerleşimine göre otomatik aks ızgarası üreten açık kaynak Python aracı.
+AutoCAD ve Sta4CAD öncesi/sonrası yapısal kat planı DXF dosyalarını temizleyen, kiriş ve perde merkez eksenlerini çıkaran, kolon yerleşimine göre aks ızgarası üreten Python aracı.
 
-## Özellikler
+## Ne Yapar?
 
-- **Otomatik Birim ve Sürüm Kurtarma:** `$INSUNITS` ve kolon kesit boyutlarından çizim birimini (`mm`, `cm`, `m`) algılar; DXF R12 (`AC1009`) veya tablo handle'ı eksik dosyaları otomatik olarak `AC1015` sürümüne yükseltir.
-- **Çok Dilli Katman Tanıma:** Türkçe, İngilizce, Hırvatça ve Fransızca standart katman adlarını (`KOLON`, `COLUMN`, `z9-COL`, `STUP`, `KIRIS`, `BEAM`, `GREDA`, `AKS`, `GRID`, `OSI`, `PERDE`, `WALL`, `ZID`) otomatik eşleştirir.
-- **Geometrik Temizlik ve Eksen Çıkarma:** Açık poligon kolonları kapatır, mükerrer kolon/kirişleri eler, `CIRCLE` ve `INSERT` blok kolonlarını işler; paralel çift kiriş çizgilerinden ve kapalı `LWPOLYLINE` kesitlerden kiriş merkez ekseni üretir.
-- **Otomatik Aks Üretimi:** Kolon ağırlık merkezlerini gruplayarak düşey (`1, 2, 3...`) ve yatay (`A, B, C...`) aks çizgileri ile aks balonlarını oluşturur; kolonsuz aks kesişimlerini ve mesnetsiz kiriş uçlarını raporlar.
+- Çizim birimini (`mm`, `cm`, `m`) `$INSUNITS` ve kolon kesit boyutlarından otomatik algılar; eski R12 (`AC1009`) veya eksik tablolu DXF dosyalarını `AC1015` sürümüne kurtarır.
+- Farklı ofis standartlarındaki katman adlarını (`KOLON`, `COLUMN`, `z9-COL`, `STUP`, `KIRIS`, `BEAM`, `GREDA`, `PERDE`, `WALL`, `AKS`, `GRID` vb.) eşleştirir.
+- Açık kalmış kolon poligonlarını kapatır, üst üste binmiş mükerrer çizgileri eler, `CIRCLE` ve `INSERT` blok kolonlarını okur.
+- Paralel çift kiriş çizgilerinden ve kapalı poligon kesitlerden kiriş merkez ekseni (`KIRIS_EKSEN`), perde poligonlarından perde ekseni (`PERDE_EKSEN`) üretir.
+- Kolon ağırlık merkezlerini gruplayarak düşey (`1, 2, 3...`) ve yatay (`A, B, C...`) aks çizgileri ile aks balonlarını oluşturur.
+- Mesnetsiz kiriş uçlarını, kolonsuz aks kesişimlerini ve TBDY 2018 minimum kesit sınırlarının altında kalan elemanları raporlar; istenirse `PAFTA_HATA` katmanında işaretler.
 
 ## Kurulum
 
 ```bash
+git clone [https://github.com/serhanapak/pafta_araci.git](https://github.com/serhanapak/pafta_araci.git)
+cd pafta_araci
 pip install -e ".[dev]"
-pafta-temizle giris_pafta.dxf temiz_pafta.dxf
-pafta-aks temiz_pafta.dxf aks_pafta.dxf --json
+```
+
+## Kullanım
+
+Komut satırından:
+
+```bash
+pafta-temizle ham_pafta.dxf temiz_pafta.dxf
+pafta-aks temiz_pafta.dxf aksli_pafta.dxf
+```
+
+JSON çıktı almak veya birimi elle sabitlemek için:
+
+```bash
+pafta-aks temiz_pafta.dxf aksli_pafta.dxf --birim cm --json
+```
+
+Python içinden:
+
+```python
+from pafta.kat import KatPaftasi
+
+pafta = KatPaftasi("kat_plani.dxf")
+pafta.temizle("temiz.dxf", gorsel_hata=True)
+rapor = pafta.aks_uret("aksli.dxf", gorsel_hata=True)
+
+print(rapor.konsol_raporu())
+```
+
+## Test
+
+```bash
 pytest
+```

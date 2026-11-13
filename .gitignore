@@ -4,3 +4,10 @@ __pycache__/
 .DS_Store
 .pytest_cache/
 ornek_pafta/sentetik_stres/
+*.egg-info/
+build/
+dist/
+*_temiz.dxf
+*_aks.dxf
+temiz_kat.dxf
+aks_kat.dxf
