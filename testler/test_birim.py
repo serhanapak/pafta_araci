@@ -32,20 +32,22 @@ def test_milimetre():
     assert r.birim == "mm"
 
 
-def test_geometri_yoksa_bilinen_dxf_baslik_birimi_kullanilir():
+def test_geometri_yoksa_bilinen_dxf_basligi_tek_basina_yeterli_degildir():
     doc = ezdxf.new()
     doc.header["$INSUNITS"] = 4
 
     r = birim_tahmin(doc)
 
-    assert r.birim == "mm"
+    assert r.birim is None
     assert r.baslik == "mm"
-    assert any(b.kod == "BIRIM_AZ_VERI" for b in r.bulgular)
+    assert r.bulgular[-1].kod == "BIRIM_BELIRSIZ"
+    assert "başlığında mm birimi var" in r.bulgular[-1].mesaj
+    assert "örneği yok" in r.bulgular[-1].mesaj
 
 
 def test_baslik_geometri_celiskisi():
     r = birim_tahmin(kat(1, 6))
-    assert r.birim == "cm"
+    assert r.birim is None
     assert r.bulgular[0].kod == "BIRIM_BASLIK_UYUSMUYOR"
 
 

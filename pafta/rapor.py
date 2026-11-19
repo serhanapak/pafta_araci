@@ -1,10 +1,12 @@
 import json
-from dataclasses import dataclass, field, asdict
-from pafta.hata import Bulgu, ozet
+from dataclasses import dataclass, field
+
+from pafta.hata import Bulgu, _json_deger, kategori_ozeti, ozet
 
 
 @dataclass
 class AnalizRaporu:
+    # Eski çağıranlar için alan adlarını, sırasını ve varsayılanları koru.
     dosya_adi: str = ""
     cikis_dosyasi: str = ""
     birim: str = "cm"
@@ -40,16 +42,25 @@ class AnalizRaporu:
     sifir_boy_kiris_silinen: int = 0
     kolon_disi_uc_sayisi: int = 0
 
-    # Bulgular
+    # Bulgular ve yeni rapor API'sinin ek alanları
     bulgular: list[Bulgu] = field(default_factory=list)
+    kolon_sonuc: object | None = None
+    kiris_sonuc: object | None = None
+    perde_sonuc: object | None = None
 
     def bulgu_ozeti(self) -> dict:
+        """Return the legacy severity counts (BILGI/UYARI/HATA)."""
         return ozet(self.bulgular)
 
+    def kategori_ozeti(self) -> dict:
+        return kategori_ozeti(self.bulgular)
+
     def to_dict(self) -> dict:
-        d = asdict(self)
-        d["bulgu_ozeti"] = self.bulgu_ozeti()
-        return d
+        # Include dataclass fields and attributes dynamically added by KatPaftasi.
+        sonuc = {ad: _json_deger(deger) for ad, deger in vars(self).items()}
+        sonuc["bulgu_ozeti"] = self.bulgu_ozeti()
+        sonuc["kategori_ozeti"] = self.kategori_ozeti()
+        return sonuc
 
     def to_json(self, indent: int = 2) -> str:
         return json.dumps(self.to_dict(), ensure_ascii=False, indent=indent)
@@ -64,7 +75,10 @@ class AnalizRaporu:
             f"tek çizgi {self.tek_cizgi_sayisi} | uç yakalanan {self.uc_yakalanan_kiris} | "
             f"çakışık silinen {self.cakisik_kiris_silinen} | sıfır boy silinen {self.sifir_boy_kiris_silinen} | "
             f"kolon dışı uç {self.kolon_disi_uc_sayisi}",
-            *( [f"PERDE : {self.perde_sayisi} adet | eksen {self.perde_eksen_sayisi}"] if self.perde_sayisi else [] ),
+            *(
+                [f"PERDE : {self.perde_sayisi} adet | eksen {self.perde_eksen_sayisi}"]
+                if self.perde_sayisi else []
+            ),
             f"çıkış : {self.cikis_dosyasi}",
         ]
         return "\n".join(lines)

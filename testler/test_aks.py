@@ -23,7 +23,7 @@ def test_aks_ayni_dosyada_tekrar_calistirilinca_mukerrer_uretmez(tmp_path):
     elle_handle = elle_cizilen.dxf.handle
     doc.saveas(dosya)
 
-    komut = [sys.executable, str(KOK / "aks.py"), str(dosya), str(dosya)]
+    komut = [sys.executable, str(KOK / "aks.py"), str(dosya), str(dosya), "--birim", "cm"]
     subprocess.run(komut, check=True, capture_output=True, text=True)
     ilk_doc = ezdxf.readfile(dosya)
     ilk_msp = ilk_doc.modelspace()

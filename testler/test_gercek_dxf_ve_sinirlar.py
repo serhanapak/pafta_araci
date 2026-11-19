@@ -14,7 +14,7 @@ def test_tamamen_bos_dxf_dosyasi_guvenle_islenir(tmp_path):
     cikis = tmp_path / "bos_temiz.dxf"
     doc.saveas(giris)
 
-    rapor = temizle(str(giris), str(cikis))
+    rapor = temizle(str(giris), str(cikis), birim="cm")
 
     assert cikis.exists()
     assert rapor.kolon_sayisi == 0
@@ -32,13 +32,13 @@ def test_kolonsuz_dxf_aks_uret_hata_bulgusu_verir(tmp_path):
     cikis = tmp_path / "aks_out.dxf"
     doc.saveas(giris)
 
-    rapor = aks_uret(str(giris), str(cikis))
+    rapor = aks_uret(str(giris), str(cikis), birim="cm")
 
     assert rapor.kolon_sayisi == 0
     assert any(b.kod == "AKS_KOLON_YOK" or b.kod == "KOLON_BULUNAMADI" for b in rapor.bulgular)
 
 
-def test_gercek_ornek_pafta_kopyasi_uzerinde_analiz(tmp_path):
+def test_gercek_ornek_pafta_yetersiz_geometrik_kanitta_durur(tmp_path):
     """
     Projedeki gerçek DXF paftasının bir kopyası üzerinde analiz ve temizleme çalıştırılır.
     Orijinal dosyaya kesinlikle dokunulmaz.
@@ -53,12 +53,37 @@ def test_gercek_ornek_pafta_kopyasi_uzerinde_analiz(tmp_path):
 
     cikis = tmp_path / "sonuc_ornek.dxf"
 
-    # Analiz çalıştır
-    rapor = temizle(str(kopya), str(cikis))
+    # Dosyanın mm başlığı olsa da doğrulanmış kolon geometrisi yoksa otomatik durmalı.
+    import pytest
+    from pafta.birim import BirimBelirsizHatasi
 
-    assert cikis.exists()
-    assert rapor.birim == "mm", f"Birim INSUNITS=4 gereği mm olmalıydı, {rapor.birim} bulundu"
+    with pytest.raises(BirimBelirsizHatasi, match="başlığında mm birimi var"):
+        temizle(str(kopya), str(cikis))
+
+    assert not cikis.exists()
+
+
+def test_gercek_ornek_pafta_acik_birimle_basariyla_analiz_edilir(tmp_path):
+    """Gerçek pafta, birim açıkça seçildiğinde geçerli bir DXF çıktısı üretmelidir."""
+    import pytest
+
+    kok = Path(__file__).resolve().parent.parent
+    orijinal = kok / "ornek_pafta" / "two-bay-slab-formwork-plan-plan-de-coffrage.dxf"
+    if not orijinal.exists():
+        pytest.skip("Gerçek örnek DXF bu çalışma ağacında bulunmuyor")
+
+    kopya = tmp_path / "kopya_acik_birim.dxf"
+    cikis = tmp_path / "sonuc_acik_birim.dxf"
+    shutil.copy2(orijinal, kopya)
+
+    rapor = temizle(str(kopya), str(cikis), birim="mm")
+
+    assert rapor.birim == "mm"
+    assert cikis.is_file()
     assert cikis.stat().st_size > 0
+
+    sonuc = ezdxf.readfile(cikis)
+    assert len(list(sonuc.modelspace())) > 0
 
 
 def test_buyuk_dosya_performans_olcum(tmp_path):
@@ -67,6 +92,7 @@ def test_buyuk_dosya_performans_olcum(tmp_path):
     Performans iddiası sayısal ölçüme dayandırılır.
     """
     doc = ezdxf.new()
+    doc.header["$INSUNITS"] = 5
     msp = doc.modelspace()
     doc.layers.add("KOLON")
     doc.layers.add("KIRIS")
@@ -124,7 +150,9 @@ def test_r12_ve_eksik_tablo_handle_yukseltme(tmp_path):
     cikis = tmp_path / "r12_cikis.dxf"
     doc.saveas(giris)
 
-    kp = KatPaftasi(giris)
+    # R12 $INSUNITS bilgisini saklamaz; bu test sürüm yükseltmesini doğruladığı
+    # için santimetre birimi açıkça verilir.
+    kp = KatPaftasi(giris, birim_zorla="cm")
     kp.temizle()
     rapor = kp.aks_uret(cikis)
 
@@ -151,7 +179,7 @@ def test_dairesel_kolon_ve_cok_dilli_katmanlar(tmp_path):
     giris = tmp_path / "cok_dilli.dxf"
     doc.saveas(giris)
 
-    kp = KatPaftasi(giris)
+    kp = KatPaftasi(giris, birim_zorla="cm")
     rapor = kp.aks_uret(tmp_path / "cok_dilli_cikis.dxf")
 
     assert "z9-COL" in rapor.katmanlar["KOLON"]
@@ -167,6 +195,7 @@ def test_kapali_polyline_kiris_eksen_uretimi(tmp_path):
     from pafta.kat import KatPaftasi
 
     doc = ezdxf.new("AC1015")
+    doc.header["$INSUNITS"] = 5
     doc.layers.add("KOLON")
     doc.layers.add("KIRIS")
     msp = doc.modelspace()
@@ -178,7 +207,7 @@ def test_kapali_polyline_kiris_eksen_uretimi(tmp_path):
     cikis = tmp_path / "poly_kiris_cikis.dxf"
     doc.saveas(giris)
 
-    kp = KatPaftasi(giris)
+    kp = KatPaftasi(giris, birim_zorla="cm")
     kp.temizle()
     rapor = kp.aks_uret(cikis)
 

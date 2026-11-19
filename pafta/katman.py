@@ -2,6 +2,13 @@ from dataclasses import dataclass, field
 import unicodedata
 
 from pafta.hata import Bulgu
+from pafta.isaret import (
+    isaretli_mi,
+    ISARET_AKS,
+    ISARET_KIRIS_EKSEN,
+    ISARET_PERDE_EKSEN,
+    ISARET_HATA,
+)
 
 
 KATEGORILER = ("KOLON", "KIRIS", "AKS", "PERDE")
@@ -50,7 +57,7 @@ def _siniflandir(ad):
     bulunan = []
 
     for kategori, anahtarlar in ESLESMELER.items():
-        if kategori == "KIRIS" and "EKSEN" in parcalar:
+        if kategori in ("KIRIS", "PERDE") and "EKSEN" in parcalar:
             continue
 
         tam_set = {normalize(t) for t in TAM_ESLESME.get(kategori, ())}
@@ -67,8 +74,54 @@ def _siniflandir(ad):
     return bulunan
 
 
+
+
+PROGRAM_ETIKETLERI = (
+    ISARET_AKS,
+    ISARET_KIRIS_EKSEN,
+    ISARET_PERDE_EKSEN,
+    ISARET_HATA,
+)
+
+
+def _program_uretimi_katmanlari(doc):
+    """
+    Yalnızca bütün nesneleri program etiketi taşıyan katmanları döndürür.
+    Model alanı, kağıt alanları ve bloklar kontrol edilir.
+    Herhangi bir tarama hatasında hiçbir katman gizlenmez.
+    """
+    durumlar = {}
+
+    try:
+        koleksiyonlar = (doc.layouts, doc.blocks)
+
+        for koleksiyon in koleksiyonlar:
+            for layout in koleksiyon:
+                for entity in layout:
+                    if not hasattr(entity, "dxf"):
+                        continue
+
+                    katman = entity.dxf.layer
+                    isaretli = any(
+                        isaretli_mi(entity, etiket=etiket)
+                        for etiket in PROGRAM_ETIKETLERI
+                    )
+
+                    durumlar.setdefault(katman, []).append(isaretli)
+
+    except Exception:
+        return set()
+
+    return {
+        katman
+        for katman, durumlar_listesi in durumlar.items()
+        if durumlar_listesi and all(durumlar_listesi)
+    }
+
+
 def katman_tani(doc, secimler=None):
     mevcut = katmanlari_listele(doc)
+    program_katmanlari = _program_uretimi_katmanlari(doc)
     secimler = secimler or {}
 
     sonuc = KatmanSonuc(katmanlar={k: [] for k in KATEGORILER})
@@ -100,7 +153,8 @@ def katman_tani(doc, secimler=None):
             )
             sonuc.tanimsiz.append(ad)
         else:
-            sonuc.tanimsiz.append(ad)
+            if ad not in program_katmanlari:
+                sonuc.tanimsiz.append(ad)
 
     if sonuc.tanimsiz:
         sonuc.bulgular.append(

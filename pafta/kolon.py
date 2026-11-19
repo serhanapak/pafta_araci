@@ -1,12 +1,20 @@
 import math
 from dataclasses import dataclass, field
+from enum import Enum
 from pafta.hata import Bulgu
+from pafta.geometri import dikdortgen_kenar_olculeri
 from ortak import (
     katmandakiler,
     kose_listesi,
     merkez,
     blok_merkezleri,
 )
+
+
+class KolonOlcuDurumu(str, Enum):
+    KESIN = "KESIN"
+    YAKLASIK = "YAKLASIK"
+    BELIRSIZ = "BELIRSIZ"
 
 
 @dataclass
@@ -21,6 +29,7 @@ class KolonBilgi:
     kose_sayisi: int = 0
     kisa_kenar: float = 0.0
     uzun_kenar: float = 0.0
+    olcu_durumu: KolonOlcuDurumu = KolonOlcuDurumu.BELIRSIZ
 
 
 @dataclass
@@ -93,14 +102,12 @@ def kolonlari_isle(doc, msp, katmanlar, ayar, duzelt=True) -> KolonAnalizSonucu:
         pts = kose_listesi(pl)
 
         if len(pts) < 3:
-            if duzelt:
-                msp.delete_entity(pl)
             sonuc.gecersiz_sayisi += 1
             sonuc.bulgular.append(
                 Bulgu(
                     "KOLON_GECERSIZ",
                     "UYARI",
-                    f"3 köşeden az polyline elendi ({len(pts)} köşe)",
+                    f"3 köşeden az polyline analiz dışında bırakıldı ({len(pts)} köşe)",
                     konum=pts[0] if pts else None,
                     handle=handle,
                 )
@@ -111,9 +118,7 @@ def kolonlari_isle(doc, msp, katmanlar, ayar, duzelt=True) -> KolonAnalizSonucu:
             d_uc = math.dist(pts[0], pts[-1])
             if d_uc <= tol_uc:
                 if duzelt:
-                    if len(pts) > 4:
-                        pts = pts[:-1]
-                        pl.set_points(pts, format="xy")
+                    # Kapanış sırasında gerçek köşeleri koru.
                     pl.closed = True
                 sonuc.acik_kapatilan += 1
                 sonuc.bulgular.append(
@@ -135,12 +140,29 @@ def kolonlari_isle(doc, msp, katmanlar, ayar, duzelt=True) -> KolonAnalizSonucu:
                         handle=handle,
                     )
                 )
+                # Açık ve uçları tolerans dışında kalan polyline geçerli
+                # kolon geometrisi değildir; sonraki analizlere aktarma.
+                continue
 
         px = [p[0] for p in pts]
         py = [p[1] for p in pts]
         min_x, max_x = min(px), max(px)
         min_y, max_y = min(py), max(py)
         w, h = max_x - min_x, max_y - min_y
+        kenar_olculeri = dikdortgen_kenar_olculeri(pl)
+        if kenar_olculeri is None:
+            # Dikdörtgen olarak doğrulanmayan şekillerde eski çevreleyen kutu
+            # değerlerini koru; bu değerler gerçek dikdörtgen kenarı değildir.
+            kisa_kenar, uzun_kenar = min(w, h), max(w, h)
+            olcu_durumu = (
+                KolonOlcuDurumu.YAKLASIK
+                if all(math.isfinite(v) for v in (kisa_kenar, uzun_kenar))
+                and kisa_kenar > 0
+                else KolonOlcuDurumu.BELIRSIZ
+            )
+        else:
+            kisa_kenar, uzun_kenar = kenar_olculeri
+            olcu_durumu = KolonOlcuDurumu.KESIN
         m = merkez(pts)
         alan = poligon_alani(pts)
 
@@ -153,8 +175,9 @@ def kolonlari_isle(doc, msp, katmanlar, ayar, duzelt=True) -> KolonAnalizSonucu:
             handle=handle,
             katman=pl.dxf.layer,
             kose_sayisi=len(pts),
-            kisa_kenar=min(w, h),
-            uzun_kenar=max(w, h),
+            kisa_kenar=kisa_kenar,
+            uzun_kenar=uzun_kenar,
+            olcu_durumu=olcu_durumu,
         )
 
         if any(kolon_cakisik_mi(kb, mevcut, tol_cakisma) for mevcut in _komsular(poly_izgara, m, hucre_boyutu)):
@@ -208,6 +231,7 @@ def kolonlari_isle(doc, msp, katmanlar, ayar, duzelt=True) -> KolonAnalizSonucu:
             katman=c.dxf.layer,
             kisa_kenar=cap,
             uzun_kenar=cap,
+            olcu_durumu=KolonOlcuDurumu.KESIN,
         )
 
         if any(kolon_cakisik_mi(kb, mevcut, tol_cakisma) for mevcut in _komsular(poly_izgara, m, hucre_boyutu)):

@@ -3,6 +3,8 @@ from ezdxf.enums import TextEntityAlignment
 from pafta.birim import CARPAN
 from pafta.hata import Bulgu
 from pafta.isaret import appid_tanimla, isaretle, uretilenleri_temizle, ISARET_HATA
+from pafta.kolon import KolonOlcuDurumu
+from pafta.hata import HataKodu
 
 HATA_KATMAN = "PAFTA_HATA"
 
@@ -11,6 +13,27 @@ def tbdy_on_kontrol(kolon_sonuc, ayar) -> list[Bulgu]:
     bulgular: list[Bulgu] = []
 
     for kb in kolon_sonuc.kolonlar:
+        if kb.olcu_durumu != KolonOlcuDurumu.KESIN:
+            durum = KolonOlcuDurumu(kb.olcu_durumu).value
+            yakin_olcu = (
+                f" Yaklaşık bbox kısa kenarı: {kb.kisa_kenar:.1f} {ayar.birim}."
+                if durum == KolonOlcuDurumu.YAKLASIK.value and kb.kisa_kenar > 0
+                else ""
+            )
+            bulgular.append(
+                Bulgu(
+                    HataKodu.KOLON_KESIT_OLCUSU_DOGRULANAMADI,
+                    "UYARI",
+                    f"Kolon ölçüsü {durum} olduğundan minimum kesit kontrolü yapılamadı.{yakin_olcu}",
+                    konum=(float(kb.merkez[0]), float(kb.merkez[1])),
+                    handle=kb.handle,
+                    detay={
+                        "olcu_durumu": durum,
+                        "yaklasik_kisa_kenar": kb.kisa_kenar if yakin_olcu else None,
+                    },
+                )
+            )
+            continue
         if kb.kisa_kenar <= 0:
             continue
         if kb.tur == "POLYLINE" and kb.kisa_kenar < ayar.kolon_min_dikdortgen - 1e-6:

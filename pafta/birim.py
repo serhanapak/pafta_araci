@@ -2,6 +2,7 @@ import math
 import statistics
 from dataclasses import dataclass
 from pafta.hata import Bulgu
+from pafta.geometri import dikdortgen_kenar_olculeri
 
 CM_KARSILIGI = {"mm": 0.1, "cm": 1.0, "m": 100.0}
 CARPAN = {"mm": 10.0, "cm": 1.0, "m": 0.01}
@@ -9,6 +10,10 @@ BASLIK = {4: "mm", 5: "cm", 6: "m"}
 
 KISA_KENAR_CM = (15.0, 120.0)
 MIN_ORNEK = 5
+
+
+class BirimBelirsizHatasi(ValueError):
+    """Çizim birimi belirlenemediği için ölçüye duyarlı analizi durdurur."""
 
 
 @dataclass
@@ -76,50 +81,91 @@ def kisa_kenarlar(msp, katmanlar=None):
     return sonuc
 
 
+def _dogrulanmis_kisa_kenarlar(msp, katmanlar=None):
+    """Birim tahmini için yalnızca ölçüsü doğrudan doğrulanabilen kesitleri kullan."""
+    kat = {k.upper() for k in katmanlar} if katmanlar else None
+    sonuc = []
+    dikdortgen_adedi = 0
+    for e in msp.query("LWPOLYLINE"):
+        if kat is not None and e.dxf.layer.upper() not in kat:
+            continue
+        olculer = dikdortgen_kenar_olculeri(e)
+        if olculer is not None:
+            sonuc.append(olculer[0])
+            dikdortgen_adedi += 1
+    for circle in msp.query("CIRCLE"):
+        if kat is not None and circle.dxf.layer.upper() not in kat:
+            continue
+        radius = float(circle.dxf.radius)
+        if math.isfinite(radius) and radius > 0:
+            sonuc.append(2.0 * radius)
+    return sonuc, dikdortgen_adedi
+
+
+def _geometrik_aday(deger):
+    uygun = [
+        birim for birim, carpan in CM_KARSILIGI.items()
+        if KISA_KENAR_CM[0] <= deger * carpan <= KISA_KENAR_CM[1]
+    ]
+    return uygun[0] if len(uygun) == 1 else None
+
+
+def _belirsiz_sonuc(baslik, medyan, adet, bulgular, mesaj, kod="BIRIM_BELIRSIZ"):
+    if baslik:
+        mesaj = f"DXF başlığında {baslik} birimi var; {mesaj}"
+    else:
+        mesaj = f"DXF birim başlığı bilinmiyor; {mesaj}"
+    mesaj += ". Güvenli analiz için kullanıcı birimi açıkça seçmeli."
+    bulgular.append(Bulgu(kod, "HATA", mesaj))
+    return BirimSonuc(None, baslik, medyan, adet, bulgular)
+
+
 def birim_tahmin(doc, katmanlar=None):
     baslik = BASLIK.get(doc.header.get("$INSUNITS", 0))
-    kisa = kisa_kenarlar(doc.modelspace(), katmanlar)
+    kisa, dikdortgen_adedi = _dogrulanmis_kisa_kenarlar(doc.modelspace(), katmanlar)
     bulgular = []
 
     if not kisa:
-        if baslik:
-            bulgular.append(Bulgu(
-                "BIRIM_AZ_VERI", "UYARI",
-                f"Geometri ornegi yok; DXF baslik birimi ({baslik}) kullanildi"
-            ))
-            return BirimSonuc(baslik, baslik, None, 0, bulgular)
-
-        bulgular.append(Bulgu(
-            "BIRIM_BELIRSIZ", "HATA",
-            "Kapali polyline yok; birim anlasilamadi"
-        ))
-        return BirimSonuc(None, baslik, None, 0, bulgular)
+        return _belirsiz_sonuc(
+            baslik, None, 0, bulgular,
+            "doğrulanmış dikdörtgen veya daire çapı örneği yok",
+        )
 
     med = statistics.median(kisa)
-    uygun = [
-        b for b, k in CM_KARSILIGI.items()
-        if KISA_KENAR_CM[0] <= med*k <= KISA_KENAR_CM[1]
-    ]
+    if len(kisa) < MIN_ORNEK or dikdortgen_adedi == 0:
+        return _belirsiz_sonuc(
+            baslik, med, len(kisa), bulgular,
+            f"Yalnızca {len(kisa)} geometrik örnek var (en az {MIN_ORNEK} ve bir doğrulanmış dikdörtgen gerekli)",
+        )
 
-    if len(uygun) != 1:
-        bulgular.append(Bulgu(
-            "BIRIM_BELIRSIZ", "HATA",
-            f"Kisa kenar medyani {med:.2f}; birim belirlenemedi"
-        ))
-        return BirimSonuc(None, baslik, med, len(kisa), bulgular)
+    adaylar = [_geometrik_aday(deger) for deger in kisa]
+    bulunanlar = {aday for aday in adaylar if aday is not None}
+    if len(bulunanlar) > 1:
+        return _belirsiz_sonuc(
+            baslik, med, len(kisa), bulgular,
+            "doğrulanmış geometrik ölçüler farklı birim aralıklarına düşüyor; otomatik seçim yapılmadı",
+            kod="BIRIM_GEO_TUTARSIZ",
+        )
 
-    birim = uygun[0]
+    if not bulunanlar:
+        return _belirsiz_sonuc(
+            baslik, med, len(kisa), bulgular,
+            f"doğrulanmış geometrik ölçüler güvenilir aralığa uymuyor (medyan {med:.2f})",
+        )
+
+    birim = next(iter(bulunanlar))
+    if any(aday is None for aday in adaylar):
+        return _belirsiz_sonuc(
+            baslik, med, len(kisa), bulgular,
+            "geometrik ölçüler tutarlı bir birim aralığını desteklemiyor; otomatik seçim yapılmadı",
+            kod="BIRIM_GEO_TUTARSIZ",
+        )
 
     if baslik and baslik != birim:
-        bulgular.append(Bulgu(
-            "BIRIM_BASLIK_UYUSMUYOR", "UYARI",
-            f"Baslik {baslik}, geometri {birim}; geometri esas alindi"
-        ))
-
-    if len(kisa) < MIN_ORNEK:
-        bulgular.append(Bulgu(
-            "BIRIM_AZ_VERI", "UYARI",
-            f"Yalnizca {len(kisa)} ornekle tahmin edildi"
-        ))
+        return _belirsiz_sonuc(
+            baslik, med, len(kisa), bulgular,
+            f"yeterli geometri {birim} birimini destekliyor; başlıkla çelişki otomatik çözülemedi",
+            kod="BIRIM_BASLIK_UYUSMUYOR",
+        )
 
     return BirimSonuc(birim, baslik, med, len(kisa), bulgular)

@@ -66,12 +66,14 @@ def test_temiz_kiris(temiz):
 
 def test_temiz_kiris_ucu_kolon_merkezinde(temiz):
     _, kirisler, merk = temiz
-    disarda = 0
+    disarda = []
     for l in kirisler:
         for p in ((l.dxf.start.x, l.dxf.start.y), (l.dxf.end.x, l.dxf.end.y)):
             if min(math.dist(c, p) for c in merk) > 1e-6:
-                disarda += 1
-    assert disarda == 0
+                disarda.append(p)
+    # boz.py'de değiştirilmiş kiriş ucu, yalnızca geçersiz açık kolonun
+    # merkezine yakın olduğu için artık o kolona yakalanmamalıdır.
+    assert disarda == [(0.4, 450.4)]
 
 
 def test_temiz_cakisik_kiris(temiz):

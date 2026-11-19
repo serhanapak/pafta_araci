@@ -3,10 +3,10 @@ from pathlib import Path
 import ezdxf
 from ezdxf.addons import Importer
 
-from pafta.birim import birim_tahmin, Ayar
+from pafta.birim import BirimBelirsizHatasi, birim_tahmin, Ayar
 from pafta.katman import katman_tani
 from pafta.blok import blok_tani
-from pafta.kolon import kolonlari_isle
+from pafta.kolon import KolonOlcuDurumu, kolonlari_isle
 from pafta.kiris import kirisleri_isle
 from pafta.aks import akslari_isle
 from pafta.perde import perdeleri_isle
@@ -51,7 +51,17 @@ class KatPaftasi:
             self.birim_sonucu = None
         else:
             self.birim_sonucu = birim_tahmin(self.doc, self.kolon_katmanlari)
-            secilen_birim = self.birim_sonucu.birim or "cm"
+            secilen_birim = self.birim_sonucu.birim
+            if secilen_birim is None:
+                neden = next(
+                    (b.mesaj for b in self.birim_sonucu.bulgular if b.siddet == "HATA"),
+                    "Birim için yeterli ve tutarlı kanıt bulunamadı",
+                )
+                raise BirimBelirsizHatasi(
+                    f"Çizim birimi güvenilir biçimde belirlenemedi: {neden.rstrip('.')}. Analiz yapılmadı. "
+                    "DXF $INSUNITS başlığını doğrulayın veya birimi açıkça seçin "
+                    "(Python: birim_zorla='mm'/'cm'/'m', CLI: --birim mm|cm|m)."
+                )
             self.ayar = Ayar.olustur(secilen_birim)
 
     @property
@@ -128,8 +138,13 @@ class KatPaftasi:
             hatalari_ciz(self.doc, self.msp, rapor.bulgular, self.ayar)
 
         # 3. Kısa kenar uyarısı
-        if kolon_sonuc.kisa_kenarlar:
-            med = statistics.median(kolon_sonuc.kisa_kenarlar)
+        kesin_kisa_kenarlar = [
+            kolon.kisa_kenar
+            for kolon in kolon_sonuc.kolonlar
+            if kolon.olcu_durumu == KolonOlcuDurumu.KESIN and kolon.kisa_kenar > 0
+        ]
+        if kesin_kisa_kenarlar:
+            med = statistics.median(kesin_kisa_kenarlar)
             if self.ayar.birim == "cm" and (med < 5 or med > 150):
                 rapor.bulgular.append(
                     Bulgu(

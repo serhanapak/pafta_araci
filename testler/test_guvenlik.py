@@ -19,7 +19,7 @@ def test_ayni_dosyaya_yazarken_otomatik_yedek_olusturulur(tmp_path):
     doc.saveas(dosya)
 
     # Giriş ve çıkış aynı dosya
-    temizle(str(dosya), str(dosya))
+    temizle(str(dosya), str(dosya), birim="cm")
 
     bak_dosyasi = tmp_path / "orijinal.dxf.bak"
     assert bak_dosyasi.exists(), ".bak yedek dosyası oluşturulmadı!"
@@ -37,7 +37,7 @@ def test_aks_ayni_dosyada_yedek_olusturur(tmp_path):
     )
     doc.saveas(dosya)
 
-    aks_uret(str(dosya), str(dosya))
+    aks_uret(str(dosya), str(dosya), birim="cm")
 
     bak = tmp_path / "kat_aks.dxf.bak"
     assert bak.exists()
@@ -70,7 +70,7 @@ def test_metre_ciziminde_dilatasyon_derzli_ikiz_kolonlar_silinmez(tmp_path):
     cikis = tmp_path / "temiz_ikiz_m.dxf"
     doc.saveas(giris)
 
-    rapor = temizle(str(giris), str(cikis))
+    rapor = temizle(str(giris), str(cikis), birim="m")
 
     sonuc_doc = ezdxf.readfile(cikis)
     kolonlar = list(sonuc_doc.modelspace().query('LWPOLYLINE[layer=="KOLON"]'))
@@ -97,7 +97,7 @@ def test_gercek_cakisik_kolon_silinir(tmp_path):
     cikis = tmp_path / "temiz.dxf"
     doc.saveas(giris)
 
-    rapor = temizle(str(giris), str(cikis))
+    rapor = temizle(str(giris), str(cikis), birim="cm")
     sonuc = ezdxf.readfile(cikis)
     kolonlar = list(sonuc.modelspace().query('LWPOLYLINE[layer=="KOLON"]'))
 
@@ -108,6 +108,7 @@ def test_gercek_cakisik_kolon_silinir(tmp_path):
 def test_kullanici_elle_cizilmis_eksenleri_korunur(tmp_path):
     """Kullanıcının elle çizdiği KIRIS_EKSEN çizgileri tekrar çalıştırmalarda korunmalı."""
     doc = ezdxf.new()
+    doc.header["$INSUNITS"] = 5
     msp = doc.modelspace()
     for cx in (0, 400):
         msp.add_lwpolyline(
@@ -127,7 +128,7 @@ def test_kullanici_elle_cizilmis_eksenleri_korunur(tmp_path):
 
     # 3 kez ardışık temizle
     for _ in range(3):
-        temizle(str(dosya), str(dosya))
+        temizle(str(dosya), str(dosya), birim="cm")
 
     sonuc = ezdxf.readfile(dosya).modelspace()
     eksenler = list(sonuc.query('LINE[layer=="KIRIS_EKSEN"]'))
@@ -135,3 +136,89 @@ def test_kullanici_elle_cizilmis_eksenleri_korunur(tmp_path):
 
     assert elle_handle in handles, "Kullanıcının elle çizdiği eksen silindi!"
     assert len(eksenler) == 2  # 1 elle çizilen + 1 üretilen
+
+
+def test_yedekler_onceki_yedeklerin_uzerine_yazilmaz(tmp_path):
+    """Ardışık yedeklemelerde önceki yedeklerin içeriği korunmalıdır."""
+    dosya = tmp_path / "proje.dxf"
+
+    dosya.write_bytes(b"ilk surum")
+    ilk = yedek_al(dosya)
+
+    dosya.write_bytes(b"ikinci surum")
+    ikinci = yedek_al(dosya)
+
+    assert ilk is not None
+    assert ikinci is not None
+    assert ilk != ikinci
+    assert ilk.read_bytes() == b"ilk surum"
+    assert ikinci.read_bytes() == b"ikinci surum"
+
+
+def test_gecersiz_gecici_dxf_orijinali_ve_yedegi_korur(tmp_path):
+    """Geçici DXF açılamazsa hedef dosya değiştirilmemeli ve yedek alınmamalıdır."""
+
+    hedef = tmp_path / "orijinal.dxf"
+    orijinal_icerik = b"orijinal dosya icerigi"
+    hedef.write_bytes(orijinal_icerik)
+
+    class GecersizDoc:
+        dxfversion = "AC1015"
+
+        def saveas(self, yol):
+            Path(yol).write_bytes(b"bu gecerli bir DXF degil")
+
+    hata_alindi = False
+
+    try:
+        guvenli_kaydet(GecersizDoc(), hedef)
+    except Exception:
+        hata_alindi = True
+
+    assert hata_alindi, "Geçersiz DXF kaydı hata üretmeliydi."
+    assert hedef.read_bytes() == orijinal_icerik
+    assert not Path(str(hedef) + ".bak").exists()
+
+
+def test_guvenli_kaydet_mevcut_dosya_izinlerini_korur(tmp_path):
+    """Üzerine yazılan DXF'nin dosya izinleri korunmalıdır."""
+    import stat
+
+    hedef = tmp_path / "izin_testi.dxf"
+    ezdxf.new().saveas(hedef)
+
+    hedef.chmod(0o640)
+
+    guvenli_kaydet(ezdxf.new(), hedef)
+
+    izinler = stat.S_IMODE(hedef.stat().st_mode)
+    assert izinler == 0o640
+
+
+def test_guvenli_kaydet_bellekteki_dxf_surumu_korur(tmp_path):
+    """Kaydetme sırasında sürüm yükseltilse de bellek içindeki belge değişmemelidir."""
+    hedef = tmp_path / "surum_testi.dxf"
+    doc = ezdxf.new("R12")
+    orijinal_surumu = doc.dxfversion
+
+    guvenli_kaydet(doc, hedef, yedekle=False)
+
+    assert doc.dxfversion == orijinal_surumu
+    kaydedilen_doc = ezdxf.readfile(hedef)
+    assert kaydedilen_doc.dxfversion == "AC1015"
+
+
+def test_farkli_giris_ve_cikis_dosyalarinda_cikis_yedeklenmez(tmp_path):
+    """Farklı bir çıkış dosyasının üzerine yazılırken otomatik yedek alınmamalıdır."""
+    giris = tmp_path / "giris.dxf"
+    cikis = tmp_path / "cikis.dxf"
+
+    ezdxf.new().saveas(giris)
+    ezdxf.new().saveas(cikis)
+
+    doc = ezdxf.readfile(giris)
+    guvenli_kaydet(doc, cikis, giris_yolu=giris)
+
+    assert cikis.exists()
+    assert not Path(str(cikis) + ".bak").exists()
+    ezdxf.readfile(cikis)

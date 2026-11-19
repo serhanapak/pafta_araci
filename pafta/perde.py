@@ -2,7 +2,13 @@ import math
 from dataclasses import dataclass, field
 
 from pafta.hata import Bulgu
-from pafta.isaret import appid_tanimla, isaretle, uretilenleri_temizle, ISARET_PERDE_EKSEN
+from pafta.isaret import (
+    appid_tanimla,
+    isaretle,
+    isaretli_mi,
+    uretilenleri_temizle,
+    ISARET_PERDE_EKSEN,
+)
 from ortak import katmandakiler, kose_listesi, merkez
 
 PERDE_EKSEN_KATMAN = "PERDE_EKSEN"
@@ -97,6 +103,10 @@ def perdeleri_isle(doc, msp, katmanlar, ayar, duzelt=True) -> PerdeAnalizSonucu:
             )
 
     for l in katmandakiler(msp, "LINE", katmanlar):
+        # Programın daha önce ürettiği eksenleri kaynak perde sayma.
+        if isaretli_mi(l, etiket=ISARET_PERDE_EKSEN):
+            continue
+
         handle = l.dxf.handle if hasattr(l.dxf, "handle") else ""
         p = (float(l.dxf.start.x), float(l.dxf.start.y))
         q = (float(l.dxf.end.x), float(l.dxf.end.y))

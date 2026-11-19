@@ -28,7 +28,7 @@ def test_milimetre_ciziminde_kiris_ciftleme_ve_eksen_uretimi(tmp_path):
     cikis = tmp_path / "mm_temiz.dxf"
     doc.saveas(giris)
 
-    rapor = temizle(str(giris), str(cikis))
+    rapor = temizle(str(giris), str(cikis), birim="mm")
 
     assert rapor.birim == "mm"
     assert rapor.kolon_sayisi == 2
@@ -78,6 +78,7 @@ def test_metre_ciziminde_aks_uretimi(tmp_path):
 def test_farkli_katman_adlari_otomatik_taninir(tmp_path):
     """COLUMN ve BEAM katman adlarına sahip çizim otomatik tanınmalıdır."""
     doc = ezdxf.new()
+    doc.header["$INSUNITS"] = 5
     doc.layers.add("COLUMN")
     doc.layers.add("BEAM")
     msp = doc.modelspace()
@@ -95,7 +96,7 @@ def test_farkli_katman_adlari_otomatik_taninir(tmp_path):
     cikis = tmp_path / "eng_temiz.dxf"
     doc.saveas(giris)
 
-    rapor = temizle(str(giris), str(cikis))
+    rapor = temizle(str(giris), str(cikis), birim="cm")
 
     assert "COLUMN" in rapor.katmanlar.get("KOLON", [])
     assert "BEAM" in rapor.katmanlar.get("KIRIS", [])
