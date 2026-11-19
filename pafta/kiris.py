@@ -228,7 +228,7 @@ def kirisleri_isle(
         uretilenleri_temizle(msp, etiket=ISARET_KIRIS_EKSEN)
         appid_tanimla(doc)
 
-    if EKSEN_KATMAN not in doc.layers:
+    if duzelt and EKSEN_KATMAN not in doc.layers:
         doc.layers.add(EKSEN_KATMAN, color=2)
 
     nihai = []

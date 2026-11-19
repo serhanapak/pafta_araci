@@ -15,7 +15,7 @@ def test_uzak_uclu_acik_kolon_otomatik_kapatilmaz(tmp_path, calistir):
     cikis = tmp_path / "sonuc.dxf"
     doc.saveas(giris)
 
-    calistir("temizle.py", tmp_path, giris.name, cikis.name)
+    calistir("temizle.py", tmp_path, giris.name, cikis.name, "--birim", "cm")
 
     sonuc = ezdxf.readfile(cikis)
     kolonlar = list(sonuc.modelspace().query("LWPOLYLINE"))
@@ -26,6 +26,8 @@ def test_uzak_uclu_acik_kolon_otomatik_kapatilmaz(tmp_path, calistir):
 
 def test_yakin_uclu_acik_kolon_kapatilir(tmp_path, calistir):
     doc = ezdxf.new()
+    # Geometri cm cinsinden kurulduğundan birimi belirsiz varsayılan başlığı düzelt.
+    doc.header["$INSUNITS"] = 5
     doc.layers.add("KOLON")
     doc.modelspace().add_lwpolyline(
         [(0, 0), (30, 0), (30, 60), (0, 60), (0.2, 0)],
@@ -36,19 +38,20 @@ def test_yakin_uclu_acik_kolon_kapatilir(tmp_path, calistir):
     cikis = tmp_path / "sonuc.dxf"
     doc.saveas(giris)
 
-    calistir("temizle.py", tmp_path, giris.name, cikis.name)
+    calistir("temizle.py", tmp_path, giris.name, cikis.name, "--birim", "cm")
 
     sonuc = ezdxf.readfile(cikis)
     kolonlar = list(sonuc.modelspace().query("LWPOLYLINE"))
     assert len(kolonlar) == 1
     assert kolonlar[0].closed is True
-    assert len(list(kolonlar[0].get_points())) == 4
+    assert len(list(kolonlar[0].get_points())) == 5
 
 
 def test_ayni_dosyada_tekrar_calistirma_eksenleri_cogaltmaz_ve_elle_cizileni_korur(
     tmp_path, calistir
 ):
     doc = ezdxf.new()
+    doc.header["$INSUNITS"] = 5
     msp = doc.modelspace()
     for cx in (0, 500):
         msp.add_lwpolyline(
@@ -63,12 +66,12 @@ def test_ayni_dosyada_tekrar_calistirma_eksenleri_cogaltmaz_ve_elle_cizileni_kor
     dosya = tmp_path / "tekrar.dxf"
     doc.saveas(dosya)
 
-    calistir("temizle.py", tmp_path, dosya.name, dosya.name)
+    calistir("temizle.py", tmp_path, dosya.name, dosya.name, "--birim", "cm")
     ilk = ezdxf.readfile(dosya).modelspace()
     ilk_eksenler = list(ilk.query('LINE[layer=="KIRIS_EKSEN"]'))
     ilk_isaretli = [e for e in ilk_eksenler if e.has_xdata("PAFTA_ARACI")]
 
-    calistir("temizle.py", tmp_path, dosya.name, dosya.name)
+    calistir("temizle.py", tmp_path, dosya.name, dosya.name, "--birim", "cm")
     ikinci = ezdxf.readfile(dosya).modelspace()
     ikinci_eksenler = list(ikinci.query('LINE[layer=="KIRIS_EKSEN"]'))
     ikinci_isaretli = [e for e in ikinci_eksenler if e.has_xdata("PAFTA_ARACI")]

@@ -11,3 +11,17 @@ dist/
 *_aks.dxf
 temiz_kat.dxf
 aks_kat.dxf
+
+# AutoCAD kilit dosyalari
+*.dwl
+*.dwl2
+
+# Yerel yedekler ve test ciktilari
+*.onceki
+/test_hatali_cikti.dxf
+/test_kategori_cikti.dxf
+
+# Eski prototip ve arsiv
+/isleyici.py
+/pafta_araci/
+/pafta_araci.zip

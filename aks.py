@@ -3,6 +3,7 @@ import argparse
 from pathlib import Path
 
 from pafta.kat import KatPaftasi
+from pafta.birim import BirimBelirsizHatasi
 from pafta.rapor import AnalizRaporu
 from ortak import harf
 
@@ -50,7 +51,10 @@ def main():
     parser.add_argument("--birim", choices=["mm", "cm", "m"], help="Çizim birimini zorla (mm, cm, m)")
 
     args = parser.parse_args()
-    rapor = aks_uret(args.giris, args.cikis, json_cikti=args.json, birim=args.birim)
+    try:
+        rapor = aks_uret(args.giris, args.cikis, json_cikti=args.json, birim=args.birim)
+    except BirimBelirsizHatasi as e:
+        sys.exit(f"HATA: {e}")
     if rapor.kolon_sayisi == 0:
         sys.exit("kolon bulunamadı, KOLON_KATMAN ayarını kontrol et")
 

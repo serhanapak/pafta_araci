@@ -6,6 +6,7 @@ ys = [0, 450, 900, 1300]               # 4 aks
 KOLON_B, KOLON_H = 30, 60              # 30x60 kolon
 
 doc = ezdxf.new("R2018")
+doc.header["$INSUNITS"] = 5  # Geometri santimetre cinsinden tanımlı.
 doc.layers.add("KOLON", color=1)
 doc.layers.add("KIRIS", color=5)
 msp = doc.modelspace()

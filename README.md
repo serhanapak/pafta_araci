@@ -14,7 +14,7 @@ AutoCAD ve Sta4CAD öncesi/sonrası yapısal kat planı DXF dosyalarını temizl
 ## Kurulum
 
 ```bash
-git clone [https://github.com/serhanapak/pafta_araci.git](https://github.com/serhanapak/pafta_araci.git)
+git clone https://github.com/serhanapak/pafta_araci.git
 cd pafta_araci
 pip install -e ".[dev]"
 ```

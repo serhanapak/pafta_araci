@@ -11,6 +11,7 @@ from pafta.rapor import AnalizRaporu
 
 def test_temizle_ve_aks_uret_python_api_rapor_dondurur(tmp_path):
     doc = ezdxf.new()
+    doc.header["$INSUNITS"] = 5
     doc.layers.add("KOLON")
     doc.layers.add("KIRIS")
     msp = doc.modelspace()
@@ -30,7 +31,7 @@ def test_temizle_ve_aks_uret_python_api_rapor_dondurur(tmp_path):
     doc.saveas(giris)
 
     # API çağrısı: temizle
-    rapor_t = temizle(str(giris), str(cikis_t))
+    rapor_t = temizle(str(giris), str(cikis_t), birim="cm")
     assert isinstance(rapor_t, AnalizRaporu)
     assert rapor_t.kolon_sayisi == 2
     assert rapor_t.kiris_sayisi == 1
@@ -41,12 +42,21 @@ def test_temizle_ve_aks_uret_python_api_rapor_dondurur(tmp_path):
     assert veri["kolon_sayisi"] == 2
     assert veri["birim"] == "cm"
     assert "bulgu_ozeti" in veri
+    assert veri["poly_kolon_sayisi"] == 2
+    assert veri["blok_kolon_sayisi"] == 0
+    assert veri["perde_eksen_sayisi"] == 0
+    assert veri["birim_baslik"] == rapor_t.birim_baslik
+    assert veri["cikis_dosyasi"] == str(cikis_t)
 
     # API çağrısı: aks_uret
-    rapor_a = aks_uret(str(cikis_t), str(cikis_a))
+    rapor_a = aks_uret(str(cikis_t), str(cikis_a), birim="cm")
     assert isinstance(rapor_a, AnalizRaporu)
     assert rapor_a.dusey_aks_sayisi == 2
     assert rapor_a.yatay_aks_sayisi == 1
+    aks_json = json.loads(rapor_a.to_json())
+    assert aks_json["dusey_aks_sayisi"] == 2
+    assert aks_json["yatay_aks_sayisi"] == 1
+    assert aks_json["aciklik_x"] == rapor_a.aciklik_x
 
 
 def test_cli_json_argumani_gecerli_json_uretir(tmp_path):
@@ -63,7 +73,7 @@ def test_cli_json_argumani_gecerli_json_uretir(tmp_path):
 
     kok = Path(__file__).resolve().parent.parent
     r = subprocess.run(
-        [sys.executable, str(kok / "temizle.py"), str(giris), str(cikis), "--json"],
+        [sys.executable, str(kok / "temizle.py"), str(giris), str(cikis), "--json", "--birim", "cm"],
         capture_output=True,
         text=True,
     )

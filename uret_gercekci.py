@@ -7,6 +7,7 @@ B, H = 30, 60       # kolon kesiti (cm)
 KB = 25             # kiriş genişliği (cm)
 
 doc = ezdxf.new("R2018")
+doc.header["$INSUNITS"] = 5  # Geometri santimetre cinsinden tanımlı.
 for ad, renk in (("KOLON", 1), ("KIRIS", 5)):
     doc.layers.add(ad, color=renk)
 msp = doc.modelspace()

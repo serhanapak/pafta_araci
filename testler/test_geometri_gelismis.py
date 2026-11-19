@@ -62,7 +62,7 @@ def test_egik_kiris_cizgisi_bulgu_olarak_raporlanir(tmp_path):
     cikis = tmp_path / "egik_temiz.dxf"
     doc.saveas(giris)
 
-    rapor = temizle(str(giris), str(cikis))
+    rapor = temizle(str(giris), str(cikis), birim="cm")
 
     egik_bulgulari = [b for b in rapor.bulgular if b.kod == "KIRIS_EGIK"]
     assert len(egik_bulgulari) >= 1, "Eğik kiriş için açıklayıcı bulgu üretilmedi!"
